@@ -11,6 +11,8 @@
     "start": "nest start",
     "start:auth": "nest start auth",
     "start:auth:dev": "nest start auth --watch",
+    "start:workflow": "nest start workflow",
+    "start:workflow:dev": "nest start workflow --watch",
     "start:dev": "nest start --watch",
     "dev": "nest start auth --watch",
     "start:debug": "nest start --debug --watch",
@@ -34,9 +36,11 @@
     "@nestjs/graphql": "^13.4.2",
     "@nestjs/platform-express": "^11.0.1",
     "better-auth": "^1.6.26",
+    "bullmq": "^5.81.3",
     "dotenv": "^17.4.2",
     "graphql": "^16.14.2",
     "graphql-type-json": "^0.3.2",
+    "ioredis": "^5.11.1",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -87,7 +91,12 @@
     "coverageDirectory": "./coverage",
     "testEnvironment": "node",
     "roots": [
-      "<rootDir>/apps/"
-    ]
+      "<rootDir>/apps/",
+      "<rootDir>/libs/"
+    ],
+    "moduleNameMapper": {
+      "^@app/workspace(|/.*)$": "<rootDir>/libs/workspace/src/$1",
+      "^@app/workflow(|/.*)$": "<rootDir>/libs/workflow/src/$1"
+    }
   }
 }

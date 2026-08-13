@@ -31,11 +31,13 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { settingsMenus } from "@/lib/settings-menus"
 import { sidebarFooterMenus, sidebarMenus } from "@/lib/sidebar-menus"
+import { listDataObjects, type DataObject } from "@/api/data-model"
 import { AssistantSheet } from "@/components/assistant-sheet"
 import { authClient, organization, signOut, useSession } from "@/lib/auth-client"
 import { assistantSheetOpenAtom } from "@/store/assistant-sheet"
 import { useSetAtom } from "jotai"
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { DatabaseIcon } from "@hugeicons/core-free-icons"
 
 const itemClassName = (isActive: boolean) =>
   cn(
@@ -71,6 +73,39 @@ const AppLayout = () => {
   const activeWorkspace =
     activeOrganization ?? workspaces?.[0] ?? null
   const userInitials = getInitials(user?.name, user?.email)
+  const [objects, setObjects] = useState<DataObject[]>([])
+  const [objectsLoading, setObjectsLoading] = useState(false)
+
+  useEffect(() => {
+    if (settingsMode || !activeWorkspace?.id) {
+      setObjects([])
+      return
+    }
+
+    let cancelled = false
+    setObjectsLoading(true)
+
+    listDataObjects(activeWorkspace.id)
+      .then((next) => {
+        if (!cancelled) setObjects(next)
+      })
+      .catch(() => {
+        if (!cancelled) setObjects([])
+      })
+      .finally(() => {
+        if (!cancelled) setObjectsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeWorkspace?.id, settingsMode])
+
+  const sidebarObjectItems = useMemo(
+    () =>
+      [...objects].sort((a, b) => a.pluralName.localeCompare(b.pluralName)),
+    [objects]
+  )
 
   const handleWorkspaceChange = async (organizationId: string) => {
     if (!organizationId || organizationId === activeWorkspace?.id || switching) {
@@ -229,6 +264,32 @@ const AppLayout = () => {
                     </div>
                   </div>
                 ))}
+
+            {!settingsMode && sidebarObjectItems.length > 0 ? (
+              <div className="space-y-1">
+                <p className="px-2 text-xs font-medium opacity-40">Objects</p>
+                <div className="space-y-3 p-2">
+                  {objectsLoading ? (
+                    <p className="px-2 text-sm opacity-50">Loading objects...</p>
+                  ) : sidebarObjectItems.length === 0 ? (
+                    <p className="px-2 text-sm opacity-50">No objects yet</p>
+                  ) : (
+                    sidebarObjectItems.map((object) => (
+                      <NavLink
+                        key={object.id}
+                        to={`/objects/${object.id}`}
+                        className={({ isActive }) => itemClassName(isActive)}
+                      >
+                        <HugeiconsIcon size={20} icon={DatabaseIcon} />
+                        <p className="truncate text-sm font-medium">
+                          {object.pluralName}
+                        </p>
+                      </NavLink>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
           </nav>
         </div>
       </aside>

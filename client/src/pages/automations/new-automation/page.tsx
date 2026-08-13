@@ -1,12 +1,18 @@
+import { Button } from "@/components/ui/button"
+import {
+  ButtonGroup,
+  ButtonGroupSeparator,
+} from "@/components/ui/button-group"
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ComponentProps,
 } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import {
   Background,
   Handle,
@@ -25,8 +31,6 @@ import {
   useStore,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
 import {
   Command,
   CommandEmpty,
@@ -44,7 +48,45 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { listDataObjects, type DataObject, type DataObjectField } from "@/api/data-model"
+import {
+  canvasToWorkflowDefinition,
+  createWorkflow,
+  CUSTOM_DELAY_PRESET_ID,
+  customFieldsFromDuration,
+  DEFAULT_DELAY_DURATION,
+  DELAY_DURATION_PRESETS,
+  durationFromCustomAmount,
+  formatDelayDuration,
+  getWorkflow,
+  isPositiveDelayDuration,
+  matchDelayPresetId,
+  publishWorkflow,
+  runWorkflow,
+  saveWorkflowDraft,
+  workflowDefinitionToCanvas,
+  type DelayDurationUnit,
+  type WorkflowDelayDuration,
+  type WorkflowSummary,
+} from "@/api/workflow"
+import { authClient } from "@/lib/auth-client"
+import { DeleteWorkflowDialog } from "@/components/automations/delete-workflow-dialog"
+import {
+  WorkflowExecutions,
+  WorkflowTabBar,
+  type WorkflowTab,
+} from "@/components/automations/workflow-executions"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,11 +101,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  Frame,
+  FrameHeader,
+  FramePanel,
+} from "@/components/reui/frame"
 import { cn } from "@/lib/utils"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
-  Alert02Icon,
+  ArrowDown01Icon,
   ArrowTurnBackwardIcon,
   ArrowTurnForwardIcon,
   Delete02Icon,
@@ -72,9 +119,12 @@ import {
   LayoutGridIcon,
   MapsIcon,
   MinusSignIcon,
+  PlayIcon,
   PlusSignFreeIcons,
   PlusSignIcon,
   ClockIcon,
+  ArrowLeft01FreeIcons,
+  ArrowLeft02FreeIcons,
 } from "@hugeicons/core-free-icons"
 
 type IconType = ComponentProps<typeof HugeiconsIcon>["icon"]
@@ -109,105 +159,21 @@ const TRIGGER_BLOCKS: BlockDef[] = [
     description: "When a record is deleted",
     category: "Records",
   },
-  {
-    id: "record-merged",
-    kind: "trigger",
-    label: "Record merged",
-    description: "When records are merged",
-    category: "Records",
-  },
-  {
-    id: "manual",
-    kind: "trigger",
-    label: "Manual trigger",
-    description: "Run this workflow manually",
-    category: "General",
-  },
-  {
-    id: "schedule",
-    kind: "trigger",
-    label: "Schedule",
-    description: "Run on a recurring schedule",
-    category: "General",
-  },
-  {
-    id: "webhook",
-    kind: "trigger",
-    label: "Webhook received",
-    description: "When a webhook is received",
-    category: "General",
-  },
-  {
-    id: "form-submitted",
-    kind: "trigger",
-    label: "Form submitted",
-    description: "When a form is submitted",
-    category: "Forms",
-  },
-  {
-    id: "email-received",
-    kind: "trigger",
-    label: "Email received",
-    description: "When an email is received",
-    category: "Communication",
-  },
-  {
-    id: "message-received",
-    kind: "trigger",
-    label: "Message received",
-    description: "When a chat message is received",
-    category: "Communication",
-  },
 ]
 
 const ACTION_BLOCKS: BlockDef[] = [
-  {
-    id: "custom-agent",
-    kind: "action",
-    label: "Custom agent",
-    description: "Run a custom agent",
-    category: "Agents",
-  },
-  {
-    id: "research-agent",
-    kind: "action",
-    label: "Research agent",
-    description: "Research a topic with an agent",
-    category: "Agents",
-  },
-  {
-    id: "classify-record",
-    kind: "action",
-    label: "Classify record",
-    description: "Classify a record with AI",
-    category: "AI",
-  },
-  {
-    id: "summarize-record",
-    kind: "action",
-    label: "Summarize record",
-    description: "Summarize a record with AI",
-    category: "AI",
-  },
-  {
-    id: "run-prompt",
-    kind: "action",
-    label: "Run prompt",
-    description: "Run an AI prompt",
-    category: "AI",
-  },
-  {
-    id: "extract-fields",
-    kind: "action",
-    label: "Extract fields",
-    description: "Extract structured fields with AI",
-    category: "AI",
-  },
   {
     id: "create-record",
     kind: "action",
     label: "Create record",
     description: "Create a new record",
+    category: "Records",
+  },
+  {
+    id: "find-record",
+    kind: "action",
+    label: "Find record",
+    description: "Find a record",
     category: "Records",
   },
   {
@@ -222,27 +188,6 @@ const ACTION_BLOCKS: BlockDef[] = [
     kind: "action",
     label: "Delete record",
     description: "Delete an existing record",
-    category: "Records",
-  },
-  {
-    id: "find-people",
-    kind: "action",
-    label: "Find people",
-    description: "Look up people records",
-    category: "Records",
-  },
-  {
-    id: "find-companies",
-    kind: "action",
-    label: "Find companies",
-    description: "Look up company records",
-    category: "Records",
-  },
-  {
-    id: "assign-owner",
-    kind: "action",
-    label: "Assign owner",
-    description: "Assign a user as owner",
     category: "Records",
   },
   {
@@ -285,7 +230,26 @@ type WorkflowNodeData = {
   label: string
   description: string
   incomplete?: boolean
+  objectId?: string
+  objectLabel?: string
+  objectNameSingular?: string
+  fieldValues?: Record<string, string | number | boolean | null>
+  delayDuration?: WorkflowDelayDuration
 }
+
+const isRecordTrigger = (blockId: string) => blockId.startsWith("record-")
+
+const isCreateRecordAction = (blockId: string) => blockId === "create-record"
+
+const isUpdateRecordAction = (blockId: string) => blockId === "update-record"
+
+const isRecordWriteAction = (blockId: string) =>
+  isCreateRecordAction(blockId) || isUpdateRecordAction(blockId)
+
+const isWaitAction = (blockId: string) => blockId === "wait"
+
+const isRecordObjectBlock = (blockId: string) =>
+  isRecordTrigger(blockId) || isRecordWriteAction(blockId)
 
 type PlaceholderNodeData = {
   sourceNodeId: string
@@ -316,8 +280,12 @@ const useCanvasActions = () => {
 const blockToNodeData = (block: BlockDef): WorkflowNodeData => ({
   blockId: block.id,
   label: block.label,
-  description: block.description,
-  incomplete: true,
+  description: isWaitAction(block.id)
+    ? formatDelayDuration(DEFAULT_DELAY_DURATION)
+    : block.description,
+  incomplete: isRecordObjectBlock(block.id),
+  fieldValues: isRecordWriteAction(block.id) ? {} : undefined,
+  delayDuration: isWaitAction(block.id) ? DEFAULT_DELAY_DURATION : undefined,
 })
 
 const createEdge = (source: string, target: string): Edge => ({
@@ -331,6 +299,201 @@ const createEdge = (source: string, target: string): Edge => ({
   },
   style: { strokeWidth: 1 },
 })
+
+const editableObjectFields = (fields: DataObjectField[]) =>
+  fields.filter((field) => !field.isSystem)
+
+const RecordFieldInput = ({
+  field,
+  value,
+  onChange,
+}: {
+  field: DataObjectField
+  value: string | number | boolean | null | undefined
+  onChange: (next: string | number | boolean | null) => void
+}) => {
+  const fieldId = `field-${field.id}`
+
+  if (field.type === "BOOLEAN") {
+    return (
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={fieldId}
+          checked={Boolean(value)}
+          onCheckedChange={(checked) => onChange(Boolean(checked))}
+        />
+        <Label htmlFor={fieldId} className="font-normal">
+          {field.name}
+        </Label>
+      </div>
+    )
+  }
+
+  if (field.type === "SELECT" && field.options?.length) {
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={fieldId}>{field.name}</Label>
+        <Select
+          value={value != null ? String(value) : ""}
+          onValueChange={(next) => onChange(next || null)}
+        >
+          <SelectTrigger id={fieldId} className="h-10 w-full">
+            <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+          </SelectTrigger>
+          <SelectContent align="start" alignItemWithTrigger={false}>
+            {field.options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    )
+  }
+
+  const inputType =
+    field.type === "NUMBER"
+      ? "number"
+      : field.type === "DATE"
+        ? "date"
+        : field.type === "DATETIME"
+          ? "datetime-local"
+          : "text"
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={fieldId}>{field.name}</Label>
+      <Input
+        id={fieldId}
+        type={inputType}
+        value={value != null ? String(value) : ""}
+        onChange={(event) => {
+          const raw = event.target.value
+          if (field.type === "NUMBER") {
+            onChange(raw === "" ? null : Number(raw))
+            return
+          }
+          onChange(raw)
+        }}
+        placeholder={`Enter ${field.name.toLowerCase()}`}
+      />
+    </div>
+  )
+}
+
+const DELAY_UNITS: { value: DelayDurationUnit; label: string }[] = [
+  { value: "seconds", label: "Seconds" },
+  { value: "minutes", label: "Minutes" },
+  { value: "hours", label: "Hours" },
+  { value: "days", label: "Days" },
+]
+
+const WaitDurationFields = ({
+  duration,
+  onChange,
+}: {
+  duration?: WorkflowDelayDuration
+  onChange: (next: WorkflowDelayDuration) => void
+}) => {
+  const matchedPresetId = matchDelayPresetId(duration)
+  const custom = customFieldsFromDuration(duration)
+  const [useCustom, setUseCustom] = useState(
+    matchedPresetId === CUSTOM_DELAY_PRESET_ID
+  )
+  const isCustom = useCustom || matchedPresetId === CUSTOM_DELAY_PRESET_ID
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="wait-duration-preset">Wait for</Label>
+        <Select
+          value={isCustom ? CUSTOM_DELAY_PRESET_ID : matchedPresetId}
+          onValueChange={(value) => {
+            if (!value) return
+            if (value === CUSTOM_DELAY_PRESET_ID) {
+              setUseCustom(true)
+              onChange(
+                durationFromCustomAmount(custom.amount || 1, custom.unit)
+              )
+              return
+            }
+            setUseCustom(false)
+            const preset = DELAY_DURATION_PRESETS.find(
+              (item) => item.id === value
+            )
+            if (preset) onChange({ ...preset.duration })
+          }}
+        >
+          <SelectTrigger id="wait-duration-preset" className="h-10 w-full">
+            <SelectValue placeholder="Choose a duration" />
+          </SelectTrigger>
+          <SelectContent align="start" alignItemWithTrigger={false}>
+            <SelectGroup>
+              {DELAY_DURATION_PRESETS.map((preset) => (
+                <SelectItem key={preset.id} value={preset.id}>
+                  {preset.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            <SelectSeparator />
+            <SelectItem value={CUSTOM_DELAY_PRESET_ID}>Custom</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isCustom ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="wait-duration-amount">Time</Label>
+            <Input
+              id="wait-duration-amount"
+              type="number"
+              min={1}
+              value={custom.amount || ""}
+              onChange={(event) => {
+                const amount = Number(event.target.value)
+                onChange(
+                  durationFromCustomAmount(
+                    Number.isFinite(amount) ? amount : 0,
+                    custom.unit
+                  )
+                )
+              }}
+              placeholder="Enter time"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="wait-duration-unit">Unit</Label>
+            <Select
+              value={custom.unit}
+              onValueChange={(value) => {
+                if (!value) return
+                onChange(
+                  durationFromCustomAmount(
+                    custom.amount || 1,
+                    value as DelayDurationUnit
+                  )
+                )
+              }}
+            >
+              <SelectTrigger id="wait-duration-unit" className="h-10 w-full">
+                <SelectValue placeholder="Unit" />
+              </SelectTrigger>
+              <SelectContent align="start" alignItemWithTrigger={false}>
+                {DELAY_UNITS.map((unit) => (
+                  <SelectItem key={unit.value} value={unit.value}>
+                    {unit.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 const NodeDeleteButton = ({
   id,
@@ -395,26 +558,21 @@ const WorkflowBlockNode = ({
   data,
   selected,
   deletable,
-  showTriggerBadge = false,
+  kind = "action",
   showTargetHandle = false,
 }: {
   id: string
   data: WorkflowNodeData
   selected?: boolean
   deletable?: boolean
-  showTriggerBadge?: boolean
+  kind?: "trigger" | "action"
   showTargetHandle?: boolean
 }) => {
   const { openNodeConfig } = useCanvasActions()
+  const isTrigger = kind === "trigger"
 
   return (
     <div className="group/node relative w-[300px]">
-      {showTriggerBadge ? (
-        <div className="absolute bottom-full left-0 inline-flex items-center gap-1.5 rounded-t-md bg-violet-500/15 px-2.5 py-1 text-xs font-medium text-violet-400">
-          Trigger
-        </div>
-      ) : null}
-
       {showTargetHandle ? (
         <Handle
           type="target"
@@ -423,13 +581,15 @@ const WorkflowBlockNode = ({
         />
       ) : null}
 
-      <div
+      <Frame
         role="button"
         tabIndex={0}
+        dense
+        stacked
+        spacing={"lg"}
         className={cn(
-          "relative flex min-h-10 w-full cursor-pointer items-center rounded-xl border border-border/70 bg-card px-3 py-2 text-left shadow-sm",
-          showTriggerBadge && "rounded-tl-none",
-          selected && "ring-2 ring-card"
+          "relative w-full cursor-pointer text-left shadow-sm !focus:outline-none",
+          selected && "ring-2 ring-primary/40"
         )}
         onClick={(event) => {
           event.stopPropagation()
@@ -445,20 +605,63 @@ const WorkflowBlockNode = ({
       >
         <NodeDeleteButton id={id} deletable={deletable} />
 
-        <div className="flex min-w-0 flex-1 items-center gap-2 pr-6">
-          <p className="truncate text-sm font-medium text-foreground">
-            {data.label}
-          </p>
-          {data.incomplete ? (
-            <HugeiconsIcon
-              icon={Alert02Icon}
-              size={14}
-              strokeWidth={2}
-              className="shrink-0 text-destructive"
-            />
-          ) : null}
-        </div>
-      </div>
+        <FrameHeader className="pr-6">
+          <span
+            className={cn(
+              "text-xs font-medium",
+              isTrigger ? "text-violet-400" : "text-muted-foreground"
+            )}
+          >
+            {isTrigger ? "Trigger" : "Action"}
+          </span>
+
+        </FrameHeader>
+
+        <FramePanel fit className="flex h-20 shrink-0 flex-col justify-center">
+          {isTrigger && isRecordTrigger(data.blockId) ? (
+            <div className="min-w-0">
+              <p className="text-muted-foreground text-xs">{data.description}</p>
+              <p
+                className={cn(
+                  "truncate text-sm mt-2 font-medium",
+                  !data.objectLabel && "text-muted-foreground font-normal"
+                )}
+              >
+                {data.objectLabel ?? "Select an object"}
+              </p>
+            </div>
+          ) : isWaitAction(data.blockId) ? (
+            <div className="min-w-0">
+              <p className="text-muted-foreground text-xs">{data.label}</p>
+              <p
+                className={cn(
+                  "truncate text-sm mt-2 font-medium",
+                  !isPositiveDelayDuration(data.delayDuration) &&
+                    "text-muted-foreground font-normal"
+                )}
+              >
+                {formatDelayDuration(data.delayDuration)}
+              </p>
+            </div>
+          ) : isRecordWriteAction(data.blockId) ? (
+            <div className="min-w-0">
+              <p className="text-muted-foreground text-xs">{data.label}</p>
+              <p
+                className={cn(
+                  "truncate text-sm mt-2 font-medium",
+                  !data.objectLabel && "text-muted-foreground font-normal"
+                )}
+              >
+                {data.objectLabel ?? "Select an object"}
+              </p>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              {data.description}
+            </p>
+          )}
+        </FramePanel>
+      </Frame>
 
       <Handle
         type="source"
@@ -483,7 +686,7 @@ const TriggerNode = ({
       data={data}
       selected={selected}
       deletable={deletable}
-      showTriggerBadge
+      kind="trigger"
     />
   )
 }
@@ -577,14 +780,13 @@ const StartFromScratch = ({
           render={
             <Button
               type="button"
-              size="lg"
+              size="sm"
               variant="outline"
-              className="h-12 gap-2 rounded-md px-6 text-base shadow-sm"
             />
           }
         >
           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-          Start from scratch
+          Move to...
         </DropdownMenuTrigger>
         <DropdownMenuContent align="center" side="bottom" className="w-72">
           <DropdownMenuGroup>
@@ -688,6 +890,7 @@ const CanvasBottomToolbar = ({
 
   return (
     <ButtonGroup orientation="horizontal">
+      
       <ButtonGroup>
         <ToolbarIconButton
           label="Undo"
@@ -737,12 +940,73 @@ const CanvasBottomToolbar = ({
 const initialNodes: WorkflowFlowNode[] = []
 const initialEdges: Edge[] = []
 
-const AutomationCanvas = () => {
+const AutomationCanvas = ({
+  workflowId,
+  tab,
+  onTabChange,
+}: {
+  workflowId?: string
+  tab: WorkflowTab
+  onTabChange: (tab: WorkflowTab) => void
+}) => {
+  const navigate = useNavigate()
+  const [currentWorkflowId, setCurrentWorkflowId] = useState<string | undefined>(
+    workflowId
+  )
+  const [workflowName, setWorkflowName] = useState("Untitled workflow")
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle")
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [isRunning, setIsRunning] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [showMinimap, setShowMinimap] = useState(false)
   const [configNodeId, setConfigNodeId] = useState<string | null>(null)
+  const [objects, setObjects] = useState<DataObject[]>([])
+  const [objectsLoading, setObjectsLoading] = useState(false)
+  const [objectsError, setObjectsError] = useState<string | null>(null)
+  const { data: activeOrganization } = authClient.useActiveOrganization()
+  const organizationId = activeOrganization?.id
   const { fitView, getNode, getNodes } = useReactFlow()
+
+  useEffect(() => {
+    setCurrentWorkflowId(workflowId)
+  }, [workflowId])
+
+  useEffect(() => {
+    if (!organizationId || !workflowId) return
+
+    let cancelled = false
+    void getWorkflow(organizationId, workflowId)
+      .then((detail) => {
+        if (cancelled) return
+        setWorkflowName(detail.workflow.name ?? "Untitled workflow")
+        if (detail.draftVersion?.trigger || detail.draftVersion?.steps) {
+          const canvas = workflowDefinitionToCanvas(
+            detail.draftVersion.trigger,
+            detail.draftVersion.steps
+          )
+          setNodes(canvas.nodes as WorkflowFlowNode[])
+          setEdges(canvas.edges)
+          requestAnimationFrame(() => {
+            void fitView({ padding: 0.35, duration: 200 })
+          })
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setSaveError(
+          error instanceof Error ? error.message : "Failed to load workflow"
+        )
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [fitView, organizationId, setEdges, setNodes, workflowId])
 
   const nodeTypes = useMemo(
     () => ({
@@ -757,6 +1021,19 @@ const AutomationCanvas = () => {
     (node) => node.type === "trigger" || node.type === "action"
   )
 
+  const deleteTarget = useMemo<WorkflowSummary | null>(() => {
+    if (!currentWorkflowId) return null
+    return {
+      id: currentWorkflowId,
+      name: workflowName,
+      runs: 0,
+      status: "DRAFT",
+      draftVersionId: null,
+      publishedVersionId: null,
+      updatedAt: new Date().toISOString(),
+    }
+  }, [currentWorkflowId, workflowName])
+
   const configNode = useMemo(() => {
     if (!configNodeId) return null
     const node = nodes.find((item) => item.id === configNodeId)
@@ -765,6 +1042,66 @@ const AutomationCanvas = () => {
     }
     return node as TriggerFlowNode | ActionFlowNode
   }, [configNodeId, nodes])
+
+  const configIsRecordTrigger =
+    configNode?.type === "trigger" &&
+    isRecordTrigger(configNode.data.blockId)
+
+  const configIsCreateRecord =
+    configNode?.type === "action" &&
+    isCreateRecordAction(configNode.data.blockId)
+
+  const configIsUpdateRecord =
+    configNode?.type === "action" &&
+    isUpdateRecordAction(configNode.data.blockId)
+
+  const configIsRecordWrite = configIsCreateRecord || configIsUpdateRecord
+
+  const configIsWait =
+    configNode?.type === "action" && isWaitAction(configNode.data.blockId)
+
+  const configNeedsObjects = configIsRecordTrigger || configIsRecordWrite
+
+  const configSelectedObject = useMemo(
+    () =>
+      configNode?.data.objectId
+        ? objects.find((object) => object.id === configNode.data.objectId)
+        : undefined,
+    [configNode?.data.objectId, objects]
+  )
+
+  const configObjectFields = useMemo(
+    () => editableObjectFields(configSelectedObject?.fields ?? []),
+    [configSelectedObject]
+  )
+
+  useEffect(() => {
+    if (!configNeedsObjects || !organizationId) return
+
+    let cancelled = false
+    setObjectsLoading(true)
+    setObjectsError(null)
+
+    void listDataObjects(organizationId)
+      .then((next) => {
+        if (cancelled) return
+        setObjects(next)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setObjects([])
+        setObjectsError(
+          error instanceof Error ? error.message : "Failed to load objects"
+        )
+      })
+      .finally(() => {
+        if (!cancelled) setObjectsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [configNeedsObjects, organizationId])
 
   const selectTrigger = useCallback(
     (block: BlockDef) => {
@@ -878,24 +1215,149 @@ const AutomationCanvas = () => {
     setConfigNodeId(nodeId)
   }, [])
 
+  const objectNameById = useMemo(
+    () =>
+      Object.fromEntries(
+        objects.map((object) => [object.id, object.singularName.toLowerCase()])
+      ),
+    [objects]
+  )
+
+  const persistDraft = useCallback(async () => {
+    if (!organizationId) {
+      setSaveError("Select a workspace before saving")
+      return null
+    }
+
+    setSaveState("saving")
+    setSaveError(null)
+
+    try {
+      let targetWorkflowId = currentWorkflowId
+      if (!targetWorkflowId) {
+        const created = await createWorkflow(organizationId, workflowName)
+        targetWorkflowId = created.workflow.id
+        setCurrentWorkflowId(targetWorkflowId)
+        navigate(`/automations/${targetWorkflowId}`, { replace: true })
+      }
+
+      const { trigger, steps } = canvasToWorkflowDefinition(
+        getNodes(),
+        edges,
+        objectNameById
+      )
+
+      await saveWorkflowDraft(organizationId, targetWorkflowId, {
+        name: workflowName,
+        trigger,
+        steps,
+      })
+
+      setSaveState("saved")
+      return targetWorkflowId
+    } catch (error) {
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Failed to save")
+      return null
+    }
+  }, [
+    currentWorkflowId,
+    edges,
+    getNodes,
+    navigate,
+    objectNameById,
+    organizationId,
+    workflowName,
+  ])
+
+  const handlePublish = useCallback(async () => {
+    const savedId = await persistDraft()
+    if (!savedId || !organizationId) return
+    setIsPublishing(true)
+    try {
+      await publishWorkflow(organizationId, savedId)
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : "Failed to publish workflow"
+      )
+    } finally {
+      setIsPublishing(false)
+    }
+  }, [organizationId, persistDraft])
+
+  const handleRun = useCallback(async () => {
+    if (!organizationId || !currentWorkflowId) {
+      setSaveError("Save and publish the workflow before running")
+      return
+    }
+    setIsRunning(true)
+    try {
+      await runWorkflow(organizationId, currentWorkflowId, {
+        manual: true,
+        triggeredAt: new Date().toISOString(),
+      })
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Failed to run")
+    } finally {
+      setIsRunning(false)
+    }
+  }, [currentWorkflowId, organizationId])
+
   const updateConfigNodeData = useCallback(
-    (patch: Partial<Pick<WorkflowNodeData, "label" | "description">>) => {
+    (
+      patch: Partial<
+        Pick<
+          WorkflowNodeData,
+          | "label"
+          | "description"
+          | "objectId"
+          | "objectLabel"
+          | "objectNameSingular"
+          | "fieldValues"
+          | "delayDuration"
+          | "incomplete"
+        >
+      >
+    ) => {
       if (!configNodeId) return
       setNodes((current) =>
         current.map((node) => {
           if (node.id !== configNodeId) return node
           if (node.type !== "trigger" && node.type !== "action") return node
+          const nextData = {
+            ...node.data,
+            ...patch,
+          }
+          if (isRecordObjectBlock(nextData.blockId)) {
+            nextData.incomplete = !nextData.objectId
+          }
+          if (isWaitAction(nextData.blockId)) {
+            nextData.incomplete = !isPositiveDelayDuration(
+              nextData.delayDuration
+            )
+            nextData.description = formatDelayDuration(nextData.delayDuration)
+          }
           return {
             ...node,
-            data: {
-              ...node.data,
-              ...patch,
-            },
+            data: nextData,
           }
         })
       )
     },
     [configNodeId, setNodes]
+  )
+
+  const updateConfigFieldValue = useCallback(
+    (fieldName: string, value: string | number | boolean | null) => {
+      if (!configNode) return
+      updateConfigNodeData({
+        fieldValues: {
+          ...configNode.data.fieldValues,
+          [fieldName]: value,
+        },
+      })
+    },
+    [configNode, updateConfigNodeData]
   )
 
   const canvasActions = useMemo<CanvasActions>(
@@ -951,10 +1413,16 @@ const AutomationCanvas = () => {
               className="!overflow-hidden !rounded-lg !border !border-border !bg-card"
             />
           ) : null}
-          <Panel position="center-right" className="  "></Panel>
           <Panel position="top-left">
             <ButtonGroup>
               <ButtonGroup orientation="vertical">
+              <ButtonGroup orientation="vertical" className="hidden sm:flex">
+                  <Button variant="outline" size="icon-sm" aria-label="Fit">
+                    <HugeiconsIcon icon={ArrowLeft02FreeIcons} />
+                  </Button>
+                </ButtonGroup>
+
+
                 <ButtonGroup orientation="vertical" className="hidden sm:flex">
                   <Button variant="outline" size="icon-sm" aria-label="Fit">
                     <HugeiconsIcon icon={FocusPointFreeIcons} />
@@ -977,19 +1445,48 @@ const AutomationCanvas = () => {
             </ButtonGroup>
           </Panel>
           <Panel position="top-center">
-            <ButtonGroup>
-              <Button variant="secondary" size="sm">
-                Editor
+            <WorkflowTabBar tab={tab} onTabChange={onTabChange} />
+          </Panel>
+          <Panel position="top-right">
+            <ButtonGroup className="**:data-[slot=button]:border-r-0">
+              {currentWorkflowId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  Delete
+                </Button>
+              ) : null}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={saveState === "saving"}
+                onClick={() => {
+                  void persistDraft()
+                }}
+              >
+                {saveState === "saving" ? "Saving..." : "Save draft"}
               </Button>
-              <Button variant="secondary" size="sm">
-                Executions
-              </Button>
-              <Button variant="secondary" size="sm">
-                Evaluations
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isPublishing}
+                onClick={() => {
+                  void handlePublish()
+                }}
+              >
+                {isPublishing ? "Publishing..." : "Publish"}
               </Button>
             </ButtonGroup>
+            {saveError ? (
+              <p className="mt-2 max-w-xs text-right text-xs text-destructive">
+                {saveError}
+              </p>
+            ) : null}
           </Panel>
-          <Panel position="top-right"></Panel>
           <Panel position="bottom-center">
             <CanvasBottomToolbar
               showMinimap={showMinimap}
@@ -1014,71 +1511,199 @@ const AutomationCanvas = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="node-config-title">Title</Label>
-                    <Input
-                      id="node-config-title"
-                      value={configNode.data.label}
-                      onChange={(event) =>
-                        updateConfigNodeData({ label: event.target.value })
+                  {configNeedsObjects ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="node-config-object">Object</Label>
+                      <Select
+                        value={configNode.data.objectId}
+                        onValueChange={(value) => {
+                          if (!value) return
+                          const selected = objects.find(
+                            (object) => object.id === value
+                          )
+                          updateConfigNodeData({
+                            objectId: value,
+                            objectLabel:
+                              selected?.singularName ??
+                              selected?.pluralName ??
+                              value,
+                            objectNameSingular: selected?.singularName
+                              ? selected.singularName.toLowerCase()
+                              : undefined,
+                            fieldValues: configIsRecordWrite ? {} : undefined,
+                          })
+                        }}
+                        disabled={objectsLoading || !organizationId}
+                      >
+                        <SelectTrigger
+                          id="node-config-object"
+                          className="h-10 w-full"
+                        >
+                          <SelectValue
+                            placeholder={
+                              objectsLoading
+                                ? "Loading objects..."
+                                : "Select an object"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent
+                          align="start"
+                          alignItemWithTrigger={false}
+                        >
+                          {objects.map((object) => (
+                            <SelectItem key={object.id} value={object.id}>
+                              {object.singularName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {objectsError ? (
+                        <p className="text-sm text-destructive">
+                          {objectsError}
+                        </p>
+                      ) : null}
+                      {!objectsLoading &&
+                        !objectsError &&
+                        organizationId &&
+                        objects.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No objects found. Create one in Data model settings.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {configIsRecordWrite && configSelectedObject ? (
+                    <div className="space-y-4 border-t border-border pt-4">
+                      <div>
+                        <p className="text-sm font-medium">Record fields</p>
+                        <p className="text-sm text-muted-foreground">
+                          {configIsUpdateRecord
+                            ? `Set values to update on the ${configSelectedObject.singularName.toLowerCase()} record.`
+                            : `Set values for the new ${configSelectedObject.singularName.toLowerCase()} record.`}
+                        </p>
+                      </div>
+                      {configObjectFields.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          This object has no editable fields.
+                        </p>
+                      ) : (
+                        configObjectFields.map((field) => (
+                          <RecordFieldInput
+                            key={field.id}
+                            field={field}
+                            value={
+                              configNode.data.fieldValues?.[field.key] ??
+                              configNode.data.fieldValues?.[field.name]
+                            }
+                            onChange={(next) =>
+                              updateConfigFieldValue(field.key, next)
+                            }
+                          />
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+
+                  {configIsWait ? (
+                    <WaitDurationFields
+                      duration={
+                        configNode.data.delayDuration ?? DEFAULT_DELAY_DURATION
                       }
-                      placeholder="Block title"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="node-config-description">Description</Label>
-                    <Textarea
-                      id="node-config-description"
-                      value={configNode.data.description}
-                      onChange={(event) =>
-                        updateConfigNodeData({
-                          description: event.target.value,
-                        })
+                      onChange={(delayDuration) =>
+                        updateConfigNodeData({ delayDuration })
                       }
-                      placeholder="Describe what this block does"
-                      rows={4}
                     />
-                  </div>
+                  ) : null}
+
+                  {configIsRecordTrigger ? null : (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="node-config-title">Title</Label>
+                        <Input
+                          id="node-config-title"
+                          value={configNode.data.label}
+                          onChange={(event) =>
+                            updateConfigNodeData({ label: event.target.value })
+                          }
+                          placeholder="Block title"
+                        />
+                      </div>
+                      {configIsWait ? null : (
+                        <div className="space-y-2">
+                          <Label htmlFor="node-config-description">
+                            Description
+                          </Label>
+                          <Textarea
+                            id="node-config-description"
+                            value={configNode.data.description}
+                            onChange={(event) =>
+                              updateConfigNodeData({
+                                description: event.target.value,
+                              })
+                            }
+                            placeholder="Describe what this block does"
+                            rows={4}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </>
             ) : null}
           </DialogContent>
         </Dialog>
+
+        <DeleteWorkflowDialog
+          workflow={deleteTarget}
+          organizationId={organizationId}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onDeleted={() => navigate("/automations", { replace: true })}
+        />
       </div>
     </CanvasActionsContext.Provider>
   )
 }
 
 const NewAutomationPage = () => {
-  const navigate = useNavigate()
-  const [tab] = useState("workflow")
-
-  const close = () => navigate("/automations")
+  const { workflowId } = useParams<{ workflowId?: string }>()
+  const [tab, setTab] = useState<WorkflowTab>("editor")
 
   return (
-    <Dialog open onOpenChange={(open) => !open && close()}>
-      <DialogContent
-        showCloseButton={false}
-        className={cn(
-          "flex h-full min-h-full w-full min-w-full max-w-full flex-col rounded-none p-0"
-        )}
-      >
-        <div className="min-h-0 flex-1">
-          {tab === "workflow" ? (
-            <ReactFlowProvider>
-              <AutomationCanvas />
-            </ReactFlowProvider>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <p className="text-sm font-medium">No runs yet</p>
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1">
+        {tab === "editor" ? (
+          <ReactFlowProvider>
+            <AutomationCanvas
+              workflowId={workflowId}
+              tab={tab}
+              onTabChange={setTab}
+            />
+          </ReactFlowProvider>
+        ) : tab === "executions" ? (
+          <WorkflowExecutions
+            workflowId={workflowId}
+            tab={tab}
+            onTabChange={setTab}
+          />
+        ) : (
+          <div className="relative flex h-full items-center justify-center bg-muted/20 px-6 text-center">
+            <div className="absolute top-3 left-1/2 z-10 -translate-x-1/2">
+              <WorkflowTabBar tab={tab} onTabChange={setTab} />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Evaluations coming soon</p>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                When this automation executes, run history will show up here.
+                Test cases and scoring for this automation will show up here.
               </p>
             </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

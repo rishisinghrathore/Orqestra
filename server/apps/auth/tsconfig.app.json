@@ -4,6 +4,6 @@
     "declaration": false,
     "outDir": "../../dist/apps/auth"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../../libs/workspace/src/**/*", "../../libs/workflow/src/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }

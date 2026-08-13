@@ -5,6 +5,7 @@
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true,
+    "webpackConfigPath": "webpack.config.js",
     "tsConfigPath": "apps/server/tsconfig.app.json"
   },
   "monorepo": true,
@@ -16,7 +17,9 @@
       "entryFile": "main",
       "sourceRoot": "apps/auth/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/auth/tsconfig.app.json"
+        "tsConfigPath": "apps/auth/tsconfig.app.json",
+        "webpack": true,
+        "webpackConfigPath": "webpack.config.js"
       }
     },
     "server": {
@@ -34,7 +37,27 @@
       "entryFile": "main",
       "sourceRoot": "apps/workflow/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/workflow/tsconfig.app.json"
+        "tsConfigPath": "apps/workflow/tsconfig.app.json",
+        "webpack": true,
+        "webpackConfigPath": "webpack.config.js"
+      }
+    },
+    "workflow-lib": {
+      "type": "library",
+      "root": "libs/workflow",
+      "entryFile": "index",
+      "sourceRoot": "libs/workflow/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/workflow/tsconfig.lib.json"
+      }
+    },
+    "workspace": {
+      "type": "library",
+      "root": "libs/workspace",
+      "entryFile": "index",
+      "sourceRoot": "libs/workspace/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/workspace/tsconfig.lib.json"
       }
     }
   }

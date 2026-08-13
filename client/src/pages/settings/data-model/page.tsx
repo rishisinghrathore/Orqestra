@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,30 +11,67 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { getDataObjects, subscribeDataObjects } from "@/lib/data-model"
+import { listDataObjects, type DataObject } from "@/api/data-model"
+import { DeleteObjectDialog } from "@/components/settings/delete-object-dialog"
+import { authClient } from "@/lib/auth-client"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Add01Icon } from "@hugeicons/core-free-icons"
 import { Frame, FramePanel } from "@/components/reui/frame"
 
-const useDataObjects = () =>
-  useSyncExternalStore(subscribeDataObjects, getDataObjects, getDataObjects)
-
 const DataModelSettingsPage = () => {
   const navigate = useNavigate()
-  const objects = useDataObjects()
+  const { data: activeOrganization } = authClient.useActiveOrganization()
+  const organizationId = activeOrganization?.id
   const [query, setQuery] = useState("")
+  const [objects, setObjects] = useState<DataObject[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DataObject | null>(null)
+
+  const reload = async () => {
+    if (!organizationId) return
+    const next = await listDataObjects(organizationId)
+    setObjects(next)
+  }
+
+  useEffect(() => {
+    if (!organizationId) {
+      setObjects([])
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+
+    listDataObjects(organizationId)
+      .then((next) => {
+        if (!cancelled) setObjects(next)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load objects")
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [organizationId])
 
   const filteredObjects = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     const next = !normalized
       ? objects
       : objects.filter((object) =>
-        object.pluralName.toLowerCase().includes(normalized)
-      )
+          object.pluralName.toLowerCase().includes(normalized)
+        )
 
-    return [...next].sort((a, b) =>
-      a.pluralName.localeCompare(b.pluralName)
-    )
+    return [...next].sort((a, b) => a.pluralName.localeCompare(b.pluralName))
   }, [objects, query])
 
   return (
@@ -57,7 +94,6 @@ const DataModelSettingsPage = () => {
           </Button>
         </div>
 
-
         <section className="space-y-4">
           <div>
             <h2 className="text-base font-medium">Objects</h2>
@@ -66,7 +102,6 @@ const DataModelSettingsPage = () => {
             </p>
           </div>
 
-
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -74,7 +109,9 @@ const DataModelSettingsPage = () => {
             className="sm:max-w-sm"
           />
 
-          <Frame spacing={'xs'}>
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+          <Frame spacing={"xs"}>
             <FramePanel className="!p-0">
               <Table>
                 <TableHeader>
@@ -83,13 +120,22 @@ const DataModelSettingsPage = () => {
                     <TableHead>App</TableHead>
                     <TableHead>Fields</TableHead>
                     <TableHead>Records</TableHead>
+                    <TableHead className="w-24" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredObjects.length === 0 ? (
+                  {loading ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-muted-foreground">
-                        No objects match your search.
+                      <TableCell colSpan={5} className="text-muted-foreground">
+                        Loading objects...
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredObjects.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-muted-foreground">
+                        {query.trim()
+                          ? "No objects match your search."
+                          : "No objects in this workspace yet."}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -109,16 +155,43 @@ const DataModelSettingsPage = () => {
                         </TableCell>
                         <TableCell>{object.fields.length}</TableCell>
                         <TableCell>{object.records}</TableCell>
+                        <TableCell className="text-right">
+                          {object.app === "custom" ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setDeleteTarget(object)
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          ) : null}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
                 </TableBody>
               </Table>
-
             </FramePanel>
           </Frame>
         </section>
       </div>
+
+      <DeleteObjectDialog
+        object={deleteTarget}
+        organizationId={organizationId}
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+        onDeleted={() => {
+          setDeleteTarget(null)
+          void reload()
+        }}
+      />
     </div>
   )
 }

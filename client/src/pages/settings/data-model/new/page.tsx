@@ -1,10 +1,11 @@
-import { FormEvent, useEffect, useState } from "react"
+import { type FormEvent, useEffect, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
+import { createDataObject } from "@/api/data-model"
+import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { createDataObject } from "@/lib/data-model"
 
 const pluralize = (value: string) => {
   const trimmed = value.trim()
@@ -21,6 +22,8 @@ const pluralize = (value: string) => {
 
 const NewObjectPage = () => {
   const navigate = useNavigate()
+  const { data: activeOrganization } = authClient.useActiveOrganization()
+  const organizationId = activeOrganization?.id
   const [singular, setSingular] = useState("")
   const [plural, setPlural] = useState("")
   const [description, setDescription] = useState("")
@@ -36,9 +39,14 @@ const NewObjectPage = () => {
 
   const close = () => navigate("/settings/data-model")
 
-  const onSubmit = (event: FormEvent) => {
+  const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
+
+    if (!organizationId) {
+      setError("Select a workspace first")
+      return
+    }
 
     const singularName = singular.trim()
     const pluralName = plural.trim()
@@ -53,12 +61,17 @@ const NewObjectPage = () => {
     }
 
     setSaving(true)
-    const created = createDataObject({
-      singularName,
-      pluralName,
-      description: description.trim(),
-    })
-    navigate(`/settings/data-model/${created.id}`)
+    try {
+      const created = await createDataObject(organizationId, {
+        singularName,
+        pluralName,
+        description: description.trim(),
+      })
+      navigate(`/settings/data-model/${created.id}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create object")
+      setSaving(false)
+    }
   }
 
   return (
@@ -85,7 +98,7 @@ const NewObjectPage = () => {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || !organizationId}>
               {saving ? "Saving..." : "Save"}
             </Button>
           </div>
@@ -150,7 +163,7 @@ const NewObjectPage = () => {
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving || !organizationId}>
             {saving ? "Saving..." : "Save"}
           </Button>
         </div>

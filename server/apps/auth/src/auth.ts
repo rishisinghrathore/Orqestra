@@ -5,8 +5,8 @@ import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import Stripe from 'stripe';
 import { ac, roles } from './permissions';
+import { provisionWorkspaceSchema } from '@app/workspace';
 import { createStripePlugin } from './stripe';
-import { provisionWorkspaceSchema } from './workspace-schema/provision-workspace-schema';
 import { provisionWorkspaceTrial } from './workspace-trial';
 
 /**

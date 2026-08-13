@@ -5,7 +5,9 @@
 export const getWorkspaceSchemaName = (organizationId: string): string => {
   const suffix = organizationId.toLowerCase().replace(/[^a-z0-9_]/g, '');
   if (!suffix) {
-    throw new Error('Cannot derive workspace schema name from empty organization id');
+    throw new Error(
+      'Cannot derive workspace schema name from empty organization id',
+    );
   }
   return `workspace_${suffix}`;
 };

@@ -19,6 +19,7 @@ import CreateRolePage from "@/pages/settings/roles/new/page"
 import EditRolePage from "@/pages/settings/roles/[roleId]/page"
 import AutomationsPage from "@/pages/automations/page"
 import NewAutomationPage from "@/pages/automations/new-automation/page"
+import ObjectRecordsPage from "@/pages/objects/[objectId]/page"
 import DataModelSettingsPage from "@/pages/settings/data-model/page"
 import NewObjectPage from "@/pages/settings/data-model/new/page"
 import ObjectDetailPage from "@/pages/settings/data-model/[objectId]/page"
@@ -96,6 +97,11 @@ const App = () => {
               />
               <Route path="automations" element={<AutomationsPage />} />
               <Route path="automations/new" element={<NewAutomationPage />} />
+              <Route
+                path="automations/:workflowId"
+                element={<NewAutomationPage />}
+              />
+              <Route path="objects/:objectId" element={<ObjectRecordsPage />} />
 
               <Route path="settings">
                 <Route
