@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { AnimatePresence, motion } from "motion/react"
 import {
   getWorkflowRun,
   listWorkflowRuns,
@@ -9,22 +10,45 @@ import {
   type WorkflowTrigger,
 } from "@/api/workflow"
 import { authClient } from "@/lib/auth-client"
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/components/reui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
-import { IconStack } from "@/components/reui/icon-stack"
+  Frame,
+  FrameDescription,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from "@/components/reui/frame"
+import {
+  Timeline,
+  TimelineContent,
+  TimelineHeader,
+  TimelineIndicator,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineTitle,
+} from "@/components/reui/timeline"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { ClockIcon } from "@hugeicons/core-free-icons"
-
+import { ArrowLeft01Icon } from "@hugeicons/core-free-icons"
+import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
 type WorkflowTab = "editor" | "executions" | "evaluations"
 
 type WorkflowExecutionsProps = {
@@ -35,23 +59,37 @@ type WorkflowExecutionsProps = {
 
 const TRIGGER_STEP_ID = "trigger"
 
-const statusVariant = (
-  status: string
-): "default" | "secondary" | "destructive" | "outline" => {
-  if (status === "COMPLETED" || status === "SUCCESS") return "default"
-  if (status === "FAILED") return "destructive"
-  if (status === "RUNNING" || status === "PENDING" || status === "ENQUEUED") {
-    return "secondary"
-  }
-  return "outline"
+const panelTransition = {
+  duration: 0.32,
+  ease: [0.22, 1, 0.36, 1] as const,
 }
 
-const formatStatus = (status: string) =>
-  status.toLowerCase().replace(/_/g, " ")
+const statusVariant = (
+  status: string
+): "success-light" | "destructive-light" | "info-light" | "secondary" => {
+  if (status === "COMPLETED" || status === "SUCCESS") return "success-light"
+  if (status === "FAILED") return "destructive-light"
+  if (status === "RUNNING" || status === "PENDING" || status === "ENQUEUED") {
+    return "info-light"
+  }
+  return "secondary"
+}
 
-const formatTime = (value: string | null | undefined) => {
-  if (!value) return "—"
-  return new Date(value).toLocaleString()
+const formatStatus = (status: string) => {
+  if (status === "COMPLETED") return "Success"
+  return status.toLowerCase().replace(/_/g, " ")
+}
+
+const formatRelative = (value: string | null | undefined) => {
+  if (!value) return ""
+  const diffMs = Date.now() - new Date(value).getTime()
+  const minutes = Math.max(0, Math.round(diffMs / 60000))
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  return `${days}d ago`
 }
 
 const orderedStepIds = (
@@ -84,14 +122,13 @@ const stepTitle = (
   steps: WorkflowAction[]
 ) => {
   if (stepId === TRIGGER_STEP_ID) {
-    const eventName = String(trigger?.settings?.eventName ?? "Trigger")
-    return eventName
+    return String(trigger?.settings?.eventName ?? "Start")
   }
   const step = steps.find((item) => item.id === stepId)
   return step?.name || step?.type || stepId
 }
 
-const stepTypeLabel = (
+const stepType = (
   stepId: string,
   trigger: WorkflowTrigger | undefined,
   steps: WorkflowAction[]
@@ -106,52 +143,61 @@ const JsonBlock = ({ value }: { value: unknown }) => {
   }
 
   return (
-    <pre className="max-h-80 overflow-auto rounded-md bg-muted/60 p-3 text-left text-xs leading-relaxed">
+    <pre className="max-h-64 overflow-auto rounded-lg bg-muted/70 p-3 text-left text-xs leading-relaxed">
       {JSON.stringify(value, null, 2)}
     </pre>
   )
 }
 
-const StepCard = ({
+const ExecutionStep = ({
+  step,
   stepId,
   info,
   trigger,
   steps,
 }: {
+  step: number
   stepId: string
   info?: WorkflowRunStepInfo
   trigger?: WorkflowTrigger
   steps: WorkflowAction[]
 }) => {
   const status = info?.status ?? "NOT_STARTED"
+  const type = stepType(stepId, trigger, steps)
+  const title =
+    stepId === TRIGGER_STEP_ID ? "Start" : stepTitle(stepId, trigger, steps)
+  const isActive = status === "RUNNING" || status === "PENDING"
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-muted-foreground">
-            {stepTypeLabel(stepId, trigger, steps)}
-          </p>
-          <p className="mt-1 truncate text-sm font-medium">
-            {stepTitle(stepId, trigger, steps)}
-          </p>
+    <TimelineItem step={step} className="ms-10 pb-10">
+      <TimelineHeader>
+        <TimelineSeparator className="group-data-[orientation=vertical]/timeline:-left-7 group-data-[orientation=vertical]/timeline:h-[calc(100%-1.5rem-0.25rem)] group-data-[orientation=vertical]/timeline:translate-y-7" />
+        <div className="flex items-center gap-2">
+          <TimelineTitle className="text-sm font-semibold">{title}</TimelineTitle>
         </div>
-        <Badge variant={statusVariant(status)} className="capitalize">
-          {formatStatus(status)}
-        </Badge>
-      </div>
+        <TimelineIndicator
+          className={cn(
+            "bg-muted text-muted-foreground group-data-completed/timeline-item:bg-primary group-data-completed/timeline-item:text-primary-foreground flex size-6 items-center justify-center border-none group-data-[orientation=vertical]/timeline:-left-7",
+            isActive && "ring-primary/20 ring-2"
+          )}
+        />
+      </TimelineHeader>
+      <TimelineContent className="mt-2">
+        <Item variant={'outline'}>
+          <ItemContent>
+            <ItemTitle>Output</ItemTitle>
+            <ItemDescription className="capitalize">
+              {type.replace(/_/g, " ").toLowerCase()}
+            </ItemDescription>
+            {info?.error ? (
+              <p className="mb-2 text-sm text-destructive">{info.error}</p>
+            ) : null}
+            <JsonBlock value={info?.result} />
 
-      {info?.error ? (
-        <p className="mt-3 text-sm text-destructive">{info.error}</p>
-      ) : null}
-
-      <div className="mt-3">
-        <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-          Output
-        </p>
-        <JsonBlock value={info?.result} />
-      </div>
-    </div>
+          </ItemContent>
+        </Item>
+      </TimelineContent>
+    </TimelineItem>
   )
 }
 
@@ -180,14 +226,6 @@ export const WorkflowTabBar = ({
       >
         Executions
       </Button>
-      <Button
-        type="button"
-        variant={tab === "evaluations" ? "default" : "secondary"}
-        size="sm"
-        onClick={() => onTabChange("evaluations")}
-      >
-        Evaluations
-      </Button>
     </ButtonGroup>
   )
 }
@@ -203,13 +241,15 @@ export const WorkflowExecutions = ({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [detail, setDetail] = useState<WorkflowRunDetail | null>(null)
   const [loading, setLoading] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const open = tab === "executions"
+  const showingDetails = Boolean(selectedRunId)
+
   useEffect(() => {
-    if (!organizationId || !workflowId) {
+    if (!open || !organizationId || !workflowId) {
       setRuns([])
-      setSelectedRunId(null)
-      setDetail(null)
       return
     }
 
@@ -219,17 +259,16 @@ export const WorkflowExecutions = ({
       setError(null)
       try {
         const next = await listWorkflowRuns(organizationId, workflowId)
-        if (cancelled) return
-        setRuns(next)
-        setSelectedRunId((current) => current ?? next[0]?.id ?? null)
+        if (!cancelled) setRuns(next)
       } catch (loadError: unknown) {
-        if (cancelled) return
-        setRuns([])
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Failed to load runs"
-        )
+        if (!cancelled) {
+          setRuns([])
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Failed to load runs"
+          )
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -239,15 +278,16 @@ export const WorkflowExecutions = ({
     return () => {
       cancelled = true
     }
-  }, [organizationId, workflowId])
+  }, [open, organizationId, workflowId])
 
   useEffect(() => {
-    if (!organizationId || !workflowId || !selectedRunId) {
+    if (!open || !organizationId || !workflowId || !selectedRunId) {
       setDetail(null)
       return
     }
 
     let cancelled = false
+    setDetailLoading(true)
     void getWorkflowRun(organizationId, workflowId, selectedRunId)
       .then((run) => {
         if (!cancelled) setDetail(run)
@@ -262,11 +302,14 @@ export const WorkflowExecutions = ({
           )
         }
       })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false)
+      })
 
     return () => {
       cancelled = true
     }
-  }, [organizationId, selectedRunId, workflowId])
+  }, [open, organizationId, selectedRunId, workflowId])
 
   const isLive =
     runs.some(
@@ -280,7 +323,7 @@ export const WorkflowExecutions = ({
     )
 
   useEffect(() => {
-    if (!organizationId || !workflowId || !isLive) return
+    if (!open || !organizationId || !workflowId || !isLive) return
 
     const timer = window.setInterval(() => {
       void listWorkflowRuns(organizationId, workflowId).then(setRuns)
@@ -292,141 +335,205 @@ export const WorkflowExecutions = ({
     }, 2000)
 
     return () => window.clearInterval(timer)
-  }, [isLive, organizationId, selectedRunId, workflowId])
+  }, [isLive, open, organizationId, selectedRunId, workflowId])
 
   const stepIds = useMemo(() => {
     if (!detail) return []
     return orderedStepIds(detail.state.flow.trigger, detail.state.flow.steps)
   }, [detail])
 
+  const completedStep = useMemo(() => {
+    let count = 0
+    for (const stepId of stepIds) {
+      const status = detail?.state.stepInfos[stepId]?.status
+      if (status === "SUCCESS" || status === "COMPLETED") {
+        count += 1
+      } else {
+        break
+      }
+    }
+    return count
+  }, [detail, stepIds])
+
+  const closeSheet = (nextOpen: boolean) => {
+    if (nextOpen) return
+    setSelectedRunId(null)
+    setDetail(null)
+    onTabChange("editor")
+  }
+
+  const backToList = () => {
+    setSelectedRunId(null)
+    setDetail(null)
+  }
+
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-muted/20">
-      <div className="absolute top-3 left-1/2 z-10 -translate-x-1/2">
-        <WorkflowTabBar tab={tab} onTabChange={onTabChange} />
-      </div>
-
-      {!workflowId ? (
-        <div className="flex flex-1 items-center justify-center p-12">
-          <Empty className="max-w-md py-10">
-            <EmptyHeader>
-              <EmptyMedia>
-                <IconStack aria-hidden="true" className="h-24 w-22 text-primary">
-                  <HugeiconsIcon
-                    icon={ClockIcon}
-                    strokeWidth={2}
-                    className="size-5 text-primary"
-                  />
-                </IconStack>
-              </EmptyMedia>
-              <EmptyTitle>Save the workflow first</EmptyTitle>
-              <EmptyDescription>
-                Publish and run this automation to see execution logs here.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 pt-14">
-          <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-background">
-            <div className="border-b border-border px-4 py-3">
-              <p className="text-sm font-medium">Runs</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {runs.length} execution{runs.length === 1 ? "" : "s"}
-              </p>
+    <Sheet open={open} onOpenChange={closeSheet}>
+      <SheetContent
+        side="right"
+        className="top-4 right-4 bottom-4 h-auto max-h-[calc(100dvh-2rem)] w-full !max-w-5xl gap-0 overflow-hidden rounded-xl border border-border p-0 shadow-xl sm:max-w-3xl data-[side=right]:inset-y-4 data-[side=right]:h-auto data-[side=right]:w-[min(100%-2rem,48rem)] data-[side=right]:border-l-0"
+      >
+        <SheetHeader className="shrink-0 flex-row items-center gap-3 space-y-0 border-b border-border px-4 py-3 pr-12">
+          {showingDetails ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={backToList}
+              aria-label="Back to runs"
+            >
+              <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+            </Button>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <SheetTitle className="text-base">
+                {showingDetails ? "Run Details" : "Executions"}
+              </SheetTitle>
+              {detail ? (
+                <Badge
+                  variant={statusVariant(detail.status)}
+                  className="capitalize"
+                >
+                  {formatStatus(detail.status)}
+                </Badge>
+              ) : null}
             </div>
-            <ScrollArea className="min-h-0 flex-1">
-              {error ? (
-                <p className="p-4 text-sm text-destructive">{error}</p>
-              ) : loading && runs.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  Loading runs...
-                </p>
-              ) : runs.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  No executions yet.
-                </p>
-              ) : (
-                <div className="p-2">
-                  {runs.map((run) => (
-                    <button
-                      key={run.id}
-                      type="button"
-                      className={cn(
-                        "w-full rounded-md px-3 py-2.5 text-left transition-colors",
-                        selectedRunId === run.id
-                          ? "bg-muted"
-                          : "hover:bg-muted/60"
-                      )}
-                      onClick={() => setSelectedRunId(run.id)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium">
-                          {run.name ?? "Run"}
-                        </span>
-                        <Badge
-                          variant={statusVariant(run.status)}
-                          className="capitalize"
-                        >
-                          {formatStatus(run.status)}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatTime(run.startedAt ?? run.createdAt)}
+            <SheetDescription className="sr-only">
+              Workflow run history and node output.
+            </SheetDescription>
+          </div>
+        </SheetHeader>
+
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          <AnimatePresence mode="wait" initial={false}>
+            {!showingDetails ? (
+              <motion.div
+                key="list"
+                initial={{ x: -28, opacity: 0, filter: "blur(10px)" }}
+                animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
+                exit={{ x: -36, opacity: 0, filter: "blur(10px)" }}
+                transition={panelTransition}
+                className="absolute inset-0 flex flex-col"
+              >
+                {!workflowId ? (
+                  <div className="flex flex-1 items-center justify-center p-8 text-center">
+                    <div>
+                      <p className="text-sm font-medium">Save the workflow first</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Publish and run this automation to see execution logs.
                       </p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </aside>
-
-          <ScrollArea className="min-h-0 flex-1">
-            {!detail ? (
-              <div className="flex h-full items-center justify-center p-12">
-                <p className="text-sm text-muted-foreground">
-                  Select a run to inspect node output.
-                </p>
-              </div>
-            ) : (
-              <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-medium">
-                      {detail.name ?? "Run"}
-                    </h2>
-                    <Badge
-                      variant={statusVariant(detail.status)}
-                      className="capitalize"
-                    >
-                      {formatStatus(detail.status)}
-                    </Badge>
+                    </div>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Started {formatTime(detail.startedAt)} · Ended{" "}
-                    {formatTime(detail.endedAt)}
+                ) : error && runs.length === 0 ? (
+                  <p className="p-4 text-sm text-destructive">{error}</p>
+                ) : loading && runs.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">
+                    Loading runs...
                   </p>
-                  {detail.error ? (
-                    <p className="mt-2 text-sm text-destructive">
-                      {detail.error}
-                    </p>
-                  ) : null}
-                </div>
-
-                {stepIds.map((stepId) => (
-                  <StepCard
-                    key={stepId}
-                    stepId={stepId}
-                    info={detail.state.stepInfos[stepId]}
-                    trigger={detail.state.flow.trigger}
-                    steps={detail.state.flow.steps}
-                  />
-                ))}
-              </div>
+                ) : runs.length === 0 ? (
+                  <div className="flex flex-1 items-center justify-center p-8 text-center">
+                    <div>
+                      <p className="text-sm font-medium">No executions yet</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        When this automation runs, history will show up here.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <ScrollArea className="min-h-0 flex-1">
+                    <div className="p-4">
+                      <Frame spacing="xs">
+                        <FrameHeader>
+                          <FrameTitle>Run history</FrameTitle>
+                          <FrameDescription>
+                            Past executions of this automation, including status
+                            and when each run started.
+                          </FrameDescription>
+                        </FrameHeader>
+                        <FramePanel className="!p-0">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Started</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {runs.map((run) => (
+                                <TableRow
+                                  key={run.id}
+                                  className="cursor-pointer"
+                                  onClick={() => setSelectedRunId(run.id)}
+                                >
+                                  <TableCell className="font-medium">
+                                    {run.name ?? "Run"}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant={statusVariant(run.status)}
+                                      className="capitalize"
+                                    >
+                                      {formatStatus(run.status)}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground">
+                                    {formatRelative(
+                                      run.startedAt ?? run.createdAt
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </FramePanel>
+                      </Frame>
+                    </div>
+                  </ScrollArea>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="details"
+                initial={{ x: 40, opacity: 0, filter: "blur(12px)" }}
+                animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
+                exit={{ x: 40, opacity: 0, filter: "blur(10px)" }}
+                transition={panelTransition}
+                className="absolute inset-0 flex flex-col"
+              >
+                {detailLoading && !detail ? (
+                  <p className="p-4 text-sm text-muted-foreground">
+                    Loading run...
+                  </p>
+                ) : !detail ? (
+                  <p className="p-4 text-sm text-muted-foreground">
+                    Could not load this run.
+                  </p>
+                ) : (
+                  <ScrollArea className="min-h-0 flex-1">
+                    <div className="p-4">
+                      <Timeline value={completedStep}>
+                        {stepIds.map((stepId, index) => (
+                          <ExecutionStep
+                            key={stepId}
+                            step={index + 1}
+                            stepId={stepId}
+                            info={detail.state.stepInfos[stepId]}
+                            trigger={detail.state.flow.trigger}
+                            steps={detail.state.flow.steps}
+                          />
+                        ))}
+                      </Timeline>
+                    </div>
+                  </ScrollArea>
+                )}
+              </motion.div>
             )}
-          </ScrollArea>
+          </AnimatePresence>
         </div>
-      )}
-    </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 

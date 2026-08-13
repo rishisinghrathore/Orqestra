@@ -1674,22 +1674,8 @@ const NewAutomationPage = () => {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="min-h-0 flex-1">
-        {tab === "editor" ? (
-          <ReactFlowProvider>
-            <AutomationCanvas
-              workflowId={workflowId}
-              tab={tab}
-              onTabChange={setTab}
-            />
-          </ReactFlowProvider>
-        ) : tab === "executions" ? (
-          <WorkflowExecutions
-            workflowId={workflowId}
-            tab={tab}
-            onTabChange={setTab}
-          />
-        ) : (
+      <div className="relative min-h-0 flex-1">
+        {tab === "evaluations" ? (
           <div className="relative flex h-full items-center justify-center bg-muted/20 px-6 text-center">
             <div className="absolute top-3 left-1/2 z-10 -translate-x-1/2">
               <WorkflowTabBar tab={tab} onTabChange={setTab} />
@@ -1701,7 +1687,21 @@ const NewAutomationPage = () => {
               </p>
             </div>
           </div>
+        ) : (
+          <ReactFlowProvider>
+            <AutomationCanvas
+              workflowId={workflowId}
+              tab={tab}
+              onTabChange={setTab}
+            />
+          </ReactFlowProvider>
         )}
+
+        <WorkflowExecutions
+          workflowId={workflowId}
+          tab={tab}
+          onTabChange={setTab}
+        />
       </div>
     </div>
   )

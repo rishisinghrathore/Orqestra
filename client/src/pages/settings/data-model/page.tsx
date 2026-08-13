@@ -4,6 +4,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import {
   Table,
   TableBody,
   TableCell,
@@ -15,8 +23,9 @@ import { listDataObjects, type DataObject } from "@/api/data-model"
 import { DeleteObjectDialog } from "@/components/settings/delete-object-dialog"
 import { authClient } from "@/lib/auth-client"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Add01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, DatabaseIcon } from "@hugeicons/core-free-icons"
 import { Frame, FramePanel } from "@/components/reui/frame"
+import { IconStack } from "@/components/reui/icon-stack"
 
 const DataModelSettingsPage = () => {
   const navigate = useNavigate()
@@ -73,6 +82,68 @@ const DataModelSettingsPage = () => {
 
     return [...next].sort((a, b) => a.pluralName.localeCompare(b.pluralName))
   }, [objects, query])
+
+  const isEmpty = !loading && !error && objects.length === 0
+
+  const deleteDialog = (
+    <DeleteObjectDialog
+      object={deleteTarget}
+      organizationId={organizationId}
+      open={deleteTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setDeleteTarget(null)
+      }}
+      onDeleted={() => {
+        setDeleteTarget(null)
+        void reload()
+      }}
+    />
+  )
+
+  if (isEmpty) {
+    return (
+      <>
+        <div className="no-scrollbar flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-12">
+          <Empty className="max-w-md py-10">
+            <EmptyHeader>
+              <EmptyMedia>
+                <IconStack
+                  aria-hidden="true"
+                  className="h-24 w-22 text-primary"
+                >
+                  <HugeiconsIcon
+                    icon={DatabaseIcon}
+                    strokeWidth={2}
+                    className="size-5 text-primary"
+                  />
+                </IconStack>
+              </EmptyMedia>
+              <EmptyTitle>No objects yet</EmptyTitle>
+              <EmptyDescription>
+                Add your first object to start modelling records, fields, and
+                relationships.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button
+                type="button"
+                size="sm"
+                render={<Link to="/settings/data-model/new" />}
+              >
+                <HugeiconsIcon
+                  icon={Add01Icon}
+                  strokeWidth={2}
+                  data-icon="inline-start"
+                />
+                Add object
+              </Button>
+            </EmptyContent>
+          </Empty>
+        </div>
+        {deleteDialog}
+      </>
+    )
+  }
 
   return (
     <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto p-12">
@@ -180,18 +251,7 @@ const DataModelSettingsPage = () => {
         </section>
       </div>
 
-      <DeleteObjectDialog
-        object={deleteTarget}
-        organizationId={organizationId}
-        open={deleteTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null)
-        }}
-        onDeleted={() => {
-          setDeleteTarget(null)
-          void reload()
-        }}
-      />
+      {deleteDialog}
     </div>
   )
 }
