@@ -19,6 +19,7 @@ import {
   subscribeDataObjects,
   updateDataObject,
 } from "@/lib/data-model"
+import { Frame, FramePanel } from "@/components/reui/frame"
 
 const useDataObject = (objectId: string | undefined) =>
   useSyncExternalStore(
@@ -104,7 +105,8 @@ const ObjectDetailPage = () => {
                 className="sm:max-w-sm"
               />
 
-              <div className="rounded-lg border border-border">
+              <Frame spacing={'xs'}>
+                <FramePanel className="!p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -138,7 +140,9 @@ const ObjectDetailPage = () => {
                     )}
                   </TableBody>
                 </Table>
-              </div>
+
+                </FramePanel>
+              </Frame>
 
               <div className="flex justify-end">
                 <Button type="button" variant="outline">
@@ -164,7 +168,8 @@ const ObjectDetailPage = () => {
                 className="sm:max-w-sm"
               />
 
-              <div className="rounded-lg border border-border">
+              <Frame spacing={'xs'}>
+                <FramePanel className="!p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -198,7 +203,8 @@ const ObjectDetailPage = () => {
                     )}
                   </TableBody>
                 </Table>
-              </div>
+                </FramePanel>
+              </Frame>
 
               <div className="flex justify-end">
                 <Button type="button" variant="outline">

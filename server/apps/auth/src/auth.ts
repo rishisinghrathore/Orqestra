@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import Stripe from 'stripe';
 import { ac, roles } from './permissions';
 import { createStripePlugin } from './stripe';
+import { provisionWorkspaceSchema } from './workspace-schema/provision-workspace-schema';
 import { provisionWorkspaceTrial } from './workspace-trial';
 
 /**
@@ -52,6 +53,15 @@ export const createAuth = (config: ConfigService) => {
         },
         organizationHooks: {
           afterCreateOrganization: async ({ organization: org, user }) => {
+            try {
+              await provisionWorkspaceSchema({
+                pool,
+                organizationId: org.id,
+              });
+            } catch (error) {
+              console.error('Failed to provision workspace schema', error);
+            }
+
             try {
               await provisionWorkspaceTrial({
                 stripe: stripeClient,
