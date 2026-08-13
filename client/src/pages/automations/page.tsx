@@ -188,7 +188,7 @@ const AutomationsPage = () => {
           <div>
             <h2 className="text-base font-medium">Workflows</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Published workflows run on database events via BullMQ workers.
+              Open a workflow to see its trigger, steps, and run history.
             </p>
           </div>
 
