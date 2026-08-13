@@ -9,3 +9,6 @@ build
 
 server/Untitled
 *.local.secrets
+
+# Local reference clone — not part of Orqestra
+/twenty
