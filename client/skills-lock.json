@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "receiving-webhooks": {
+      "source": "svix/ai",
+      "sourceType": "github",
+      "skillPath": "skills/receiving-webhooks/SKILL.md",
+      "computedHash": "1e07b6f9cf0b03aec4cece3bd816b14c22a4557f81947261d388171821a9c199"
+    },
+    "svix-sending-webhooks": {
+      "source": "svix/ai",
+      "sourceType": "github",
+      "skillPath": "skills/svix-sending-webhooks/SKILL.md",
+      "computedHash": "1a470ab86e0775851a9410635ce91e50a757142839bbc4826f1963675385de32"
+    }
+  }
+}
