@@ -9,6 +9,7 @@ import { BillingService } from './billing.service';
 import { DataModelController } from './data-model.controller';
 import { OrganizationAccessService } from './organization-access.service';
 import { WorkflowController } from './workflow.controller';
+import { WorkflowWebhookController } from './workflow-webhook.controller';
 import { AUTH, createAuth } from './auth';
 
 @Module({
@@ -28,6 +29,7 @@ import { AUTH, createAuth } from './auth';
     BillingController,
     DataModelController,
     WorkflowController,
+    WorkflowWebhookController,
   ],
   providers: [
     {

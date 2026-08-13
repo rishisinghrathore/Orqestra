@@ -12,6 +12,7 @@ import {
   useState,
   type ComponentProps,
 } from "react"
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { useNavigate, useParams } from "react-router-dom"
 import {
   Background,
@@ -70,6 +71,8 @@ import {
   durationFromCustomAmount,
   formatDelayDuration,
   getWorkflow,
+  getWorkflowWebhookUrl,
+  DEFAULT_WEBHOOK_BODY,
   isPositiveDelayDuration,
   matchDelayPresetId,
   publishWorkflow,
@@ -77,6 +80,7 @@ import {
   saveWorkflowDraft,
   workflowDefinitionToCanvas,
   type DelayDurationUnit,
+  type WebhookHttpMethod,
   type WorkflowDelayDuration,
   type WorkflowSummary,
 } from "@/api/workflow"
@@ -110,6 +114,7 @@ import { cn } from "@/lib/utils"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
+  Copy01Icon,
   ArrowDown01Icon,
   ArrowTurnBackwardIcon,
   ArrowTurnForwardIcon,
@@ -158,6 +163,13 @@ const TRIGGER_BLOCKS: BlockDef[] = [
     label: "Record deleted",
     description: "When a record is deleted",
     category: "Records",
+  },
+  {
+    id: "webhook",
+    kind: "trigger",
+    label: "Webhook",
+    description: "When an HTTP request is received",
+    category: "Webhook",
   },
 ]
 
@@ -235,9 +247,13 @@ type WorkflowNodeData = {
   objectNameSingular?: string
   fieldValues?: Record<string, string | number | boolean | null>
   delayDuration?: WorkflowDelayDuration
+  httpMethod?: WebhookHttpMethod
+  expectedBody?: Record<string, unknown>
 }
 
 const isRecordTrigger = (blockId: string) => blockId.startsWith("record-")
+
+const isWebhookTrigger = (blockId: string) => blockId === "webhook"
 
 const isCreateRecordAction = (blockId: string) => blockId === "create-record"
 
@@ -286,6 +302,7 @@ const blockToNodeData = (block: BlockDef): WorkflowNodeData => ({
   incomplete: isRecordObjectBlock(block.id),
   fieldValues: isRecordWriteAction(block.id) ? {} : undefined,
   delayDuration: isWaitAction(block.id) ? DEFAULT_DELAY_DURATION : undefined,
+  httpMethod: isWebhookTrigger(block.id) ? "GET" : undefined,
 })
 
 const createEdge = (source: string, target: string): Edge => ({
@@ -495,6 +512,134 @@ const WaitDurationFields = ({
   )
 }
 
+const WebhookTriggerFields = ({
+  httpMethod,
+  expectedBody,
+  webhookUrl,
+  onChange,
+}: {
+  httpMethod?: WebhookHttpMethod
+  expectedBody?: Record<string, unknown>
+  webhookUrl?: string
+  onChange: (next: {
+    httpMethod: WebhookHttpMethod
+    expectedBody?: Record<string, unknown>
+  }) => void
+}) => {
+  const method: WebhookHttpMethod = httpMethod === "POST" ? "POST" : "GET"
+  const [bodyText, setBodyText] = useState(
+    JSON.stringify(expectedBody ?? DEFAULT_WEBHOOK_BODY, null, 2)
+  )
+  const [bodyError, setBodyError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const copyUrl = async () => {
+    if (!webhookUrl) return
+    await navigator.clipboard.writeText(webhookUrl)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="webhook-live-url">Live URL</Label>
+        <div className="flex gap-2">
+          <Input
+            id="webhook-live-url"
+            readOnly
+            value={
+              webhookUrl ??
+              "Save the workflow to get a live URL"
+            }
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            disabled={!webhookUrl}
+            onClick={() => void copyUrl()}
+            aria-label="Copy webhook URL"
+          >
+            <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
+          </Button>
+        </div>
+        {copied ? (
+          <p className="text-xs text-muted-foreground">Copied</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Publish this automation, then send GET or POST requests to this URL.
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="webhook-http-method">HTTP method</Label>
+        <Select
+          value={method}
+          onValueChange={(value) => {
+            if (value !== "GET" && value !== "POST") return
+            setBodyError(null)
+            if (value === "POST") {
+              const nextBody = expectedBody ?? DEFAULT_WEBHOOK_BODY
+              setBodyText(JSON.stringify(nextBody, null, 2))
+              onChange({ httpMethod: value, expectedBody: nextBody })
+              return
+            }
+            onChange({ httpMethod: value, expectedBody: undefined })
+          }}
+        >
+          <SelectTrigger id="webhook-http-method" className="h-10 w-full">
+            <SelectValue placeholder="HTTP method" />
+          </SelectTrigger>
+          <SelectContent align="start" alignItemWithTrigger={false}>
+            <SelectItem value="GET">GET</SelectItem>
+            <SelectItem value="POST">POST</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {method === "POST" ? (
+        <div className="space-y-2">
+          <Label htmlFor="webhook-expected-body">Expected body</Label>
+          <Textarea
+            id="webhook-expected-body"
+            value={bodyText}
+            rows={8}
+            onChange={(event) => {
+              const next = event.target.value
+              setBodyText(next)
+              try {
+                const parsed = JSON.parse(next || "{}") as unknown
+                if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                  setBodyError("Expected a JSON object")
+                  return
+                }
+                setBodyError(null)
+                onChange({
+                  httpMethod: "POST",
+                  expectedBody: parsed as Record<string, unknown>,
+                })
+              } catch {
+                setBodyError("Enter a valid JSON object")
+              }
+            }}
+            placeholder='{ "message": "Workflow was started" }'
+          />
+          {bodyError ? (
+            <p className="text-sm text-destructive">{bodyError}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Sample payload for the variable picker. Incoming requests are not
+              validated against this body.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 const NodeDeleteButton = ({
   id,
   deletable = true,
@@ -628,6 +773,13 @@ const WorkflowBlockNode = ({
                 )}
               >
                 {data.objectLabel ?? "Select an object"}
+              </p>
+            </div>
+          ) : isTrigger && isWebhookTrigger(data.blockId) ? (
+            <div className="min-w-0">
+              <p className="text-muted-foreground text-xs">{data.label}</p>
+              <p className="truncate text-sm mt-2 font-medium">
+                {data.httpMethod === "POST" ? "POST" : "GET"}
               </p>
             </div>
           ) : isWaitAction(data.blockId) ? (
@@ -1047,6 +1199,10 @@ const AutomationCanvas = ({
     configNode?.type === "trigger" &&
     isRecordTrigger(configNode.data.blockId)
 
+  const configIsWebhookTrigger =
+    configNode?.type === "trigger" &&
+    isWebhookTrigger(configNode.data.blockId)
+
   const configIsCreateRecord =
     configNode?.type === "action" &&
     isCreateRecordAction(configNode.data.blockId)
@@ -1285,6 +1441,24 @@ const AutomationCanvas = ({
     }
   }, [organizationId, persistDraft])
 
+  useHotkey(
+    "Control+S",
+    () => {
+      if (saveState === "saving") return
+      void persistDraft()
+    },
+    { preventDefault: true }
+  )
+
+  useHotkey(
+    "Control+P",
+    () => {
+      if (isPublishing || saveState === "saving") return
+      void handlePublish()
+    },
+    { preventDefault: true }
+  )
+
   const handleRun = useCallback(async () => {
     if (!organizationId || !currentWorkflowId) {
       setSaveError("Save and publish the workflow before running")
@@ -1316,6 +1490,8 @@ const AutomationCanvas = ({
           | "fieldValues"
           | "delayDuration"
           | "incomplete"
+          | "httpMethod"
+          | "expectedBody"
         >
       >
     ) => {
@@ -1617,7 +1793,32 @@ const AutomationCanvas = ({
                     />
                   ) : null}
 
-                  {configIsRecordTrigger ? null : (
+                  {configIsWebhookTrigger ? (
+                    <WebhookTriggerFields
+                      httpMethod={configNode.data.httpMethod}
+                      expectedBody={configNode.data.expectedBody}
+                      webhookUrl={
+                        organizationId && currentWorkflowId
+                          ? getWorkflowWebhookUrl(
+                              organizationId,
+                              currentWorkflowId
+                            )
+                          : undefined
+                      }
+                      onChange={(next) =>
+                        updateConfigNodeData({
+                          httpMethod: next.httpMethod,
+                          expectedBody: next.expectedBody,
+                          description:
+                            next.httpMethod === "POST"
+                              ? "POST webhook"
+                              : "GET webhook",
+                        })
+                      }
+                    />
+                  ) : null}
+
+                  {configIsRecordTrigger || configIsWebhookTrigger ? null : (
                     <>
                       <div className="space-y-2">
                         <Label htmlFor="node-config-title">Title</Label>

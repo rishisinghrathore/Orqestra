@@ -295,6 +295,77 @@ export class WorkflowService {
     });
   }
 
+  async triggerWebhook(
+    organizationId: string,
+    workflowId: string,
+    payload: object = {},
+  ) {
+    const organizationExists =
+      await this.repo.organizationExists(organizationId);
+    if (!organizationExists) {
+      throw new NotFoundException(
+        `[Webhook trigger] Workspace ${organizationId} not found`,
+      );
+    }
+
+    const schemaExists = await this.repo.workspaceSchemaExists(organizationId);
+    if (!schemaExists) {
+      throw new NotFoundException(
+        `[Webhook trigger] Workspace ${organizationId} not found`,
+      );
+    }
+
+    const workflow = await this.repo.getWorkflow(organizationId, workflowId);
+    if (!workflow) {
+      throw new NotFoundException(
+        `[Webhook trigger] Workflow ${workflowId} not found in workspace ${organizationId}`,
+      );
+    }
+
+    if (
+      !workflow.last_published_version_id ||
+      workflow.last_published_version_id === ''
+    ) {
+      throw new BadRequestException(
+        `[Webhook trigger] Workflow ${workflowId} has not been activated in workspace ${organizationId}`,
+      );
+    }
+
+    const version = await this.repo.getVersion(
+      organizationId,
+      workflow.last_published_version_id,
+    );
+    if (!version) {
+      throw new BadRequestException(
+        `[Webhook trigger] No workflow version activated for workflow ${workflowId} in workspace ${organizationId}`,
+      );
+    }
+
+    if (version.trigger?.type !== WorkflowTriggerType.WEBHOOK) {
+      throw new BadRequestException(
+        `[Webhook trigger] Workflow ${workflowId} does not have a Webhook trigger in workspace ${organizationId}`,
+      );
+    }
+
+    if (version.status !== WorkflowVersionStatus.ACTIVE) {
+      throw new BadRequestException(
+        `[Webhook trigger] Workflow version ${version.id} is not active in workspace ${organizationId}`,
+      );
+    }
+
+    const run = await this.runner.run({
+      organizationId,
+      workflowVersionId: version.id,
+      payload,
+    });
+
+    return {
+      workflowName: workflow.name,
+      success: true as const,
+      workflowRunId: run.id,
+    };
+  }
+
   async resolveObjectNameSingular(
     organizationId: string,
     objectId: string,

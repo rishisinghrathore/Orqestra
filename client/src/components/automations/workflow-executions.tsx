@@ -122,6 +122,7 @@ const stepTitle = (
   steps: WorkflowAction[]
 ) => {
   if (stepId === TRIGGER_STEP_ID) {
+    if (trigger?.type === "WEBHOOK") return "Webhook"
     return String(trigger?.settings?.eventName ?? "Start")
   }
   const step = steps.find((item) => item.id === stepId)

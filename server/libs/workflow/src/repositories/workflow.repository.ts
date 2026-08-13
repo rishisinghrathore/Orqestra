@@ -22,6 +22,22 @@ export class WorkflowRepository {
     return getWorkspaceSchemaName(organizationId);
   }
 
+  async organizationExists(organizationId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM organization WHERE id = $1 LIMIT 1`,
+      [organizationId],
+    );
+    return rows.length > 0;
+  }
+
+  async workspaceSchemaExists(organizationId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM pg_namespace WHERE nspname = $1 LIMIT 1`,
+      [this.schema(organizationId)],
+    );
+    return rows.length > 0;
+  }
+
   async listWorkflows(organizationId: string): Promise<WorkflowRow[]> {
     const schema = this.schema(organizationId);
     const { rows } = await this.pool.query<WorkflowRow>(

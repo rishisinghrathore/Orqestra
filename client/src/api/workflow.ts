@@ -118,6 +118,38 @@ export function customFieldsFromDuration(
 
 export type WorkflowTriggerType = "DATABASE_EVENT" | "MANUAL" | "CRON" | "WEBHOOK"
 
+export type WebhookHttpMethod = "GET" | "POST"
+
+export const DEFAULT_WEBHOOK_BODY = { message: "Workflow was started" }
+
+export function getWebhookTriggerDefaultSettings(httpMethod: WebhookHttpMethod) {
+  if (httpMethod === "GET") {
+    return {
+      httpMethod,
+      authentication: null,
+      outputSchema: {},
+    }
+  }
+
+  return {
+    httpMethod,
+    authentication: null,
+    expectedBody: { ...DEFAULT_WEBHOOK_BODY },
+    outputSchema: {},
+  }
+}
+
+export function getWorkflowWebhookUrl(
+  organizationId: string,
+  workflowId: string
+) {
+  const base = String(import.meta.env.VITE_API_URL || window.location.origin).replace(
+    /\/$/,
+    ""
+  )
+  return `${base}/webhooks/workflows/${organizationId}/${workflowId}`
+}
+
 export type WorkflowTrigger = {
   type: WorkflowTriggerType
   settings: Record<string, unknown>
@@ -189,6 +221,8 @@ type WorkflowNodeData = {
   objectNameSingular?: string
   fieldValues?: WorkflowFieldValues
   delayDuration?: WorkflowDelayDuration
+  httpMethod?: WebhookHttpMethod
+  expectedBody?: Record<string, unknown>
 }
 
 const TRIGGER_EVENT_BY_BLOCK: Record<string, string> = {
@@ -286,16 +320,37 @@ export function canvasToWorkflowDefinition(
   }
 
   const triggerData = triggerNode.data
+  const triggerNext = (edgeTargets.get(triggerNode.id) ?? []).filter((targetId) =>
+    actionNodes.some((action) => action.id === targetId)
+  )
+
+  if (triggerData.blockId === "webhook") {
+    const httpMethod: WebhookHttpMethod =
+      triggerData.httpMethod === "POST" ? "POST" : "GET"
+    const settings =
+      httpMethod === "POST"
+        ? {
+            ...getWebhookTriggerDefaultSettings("POST"),
+            expectedBody: triggerData.expectedBody ?? DEFAULT_WEBHOOK_BODY,
+          }
+        : getWebhookTriggerDefaultSettings("GET")
+
+    return {
+      trigger: {
+        type: "WEBHOOK",
+        settings,
+        nextStepIds: triggerNext.length > 0 ? triggerNext : undefined,
+      },
+      steps,
+    }
+  }
+
   const event = TRIGGER_EVENT_BY_BLOCK[triggerData.blockId]
   const objectNameSingular =
     triggerData.objectNameSingular ??
     (triggerData.objectId
       ? objectNameById[triggerData.objectId]
       : undefined)
-
-  const triggerNext = (edgeTargets.get(triggerNode.id) ?? []).filter((targetId) =>
-    actionNodes.some((action) => action.id === targetId)
-  )
 
   const trigger: WorkflowTrigger = {
     type: "DATABASE_EVENT",
@@ -320,29 +375,54 @@ export function workflowDefinitionToCanvas(
   const edges: Edge[] = []
 
   if (trigger) {
-    const eventName = String(trigger.settings.eventName ?? "")
-    const [, action = "created"] = eventName.split(".")
-    const blockId =
-      action === "updated"
-        ? "record-updated"
-        : action === "deleted"
-          ? "record-deleted"
-          : "record-created"
-
     const triggerId = "trigger-root"
-    nodes.push({
-      id: triggerId,
-      type: "trigger",
-      position: { x: 80, y: 180 },
-      data: {
-        blockId,
-        label: "Trigger",
-        description: eventName || "Database event",
-        objectId: trigger.settings.objectType as string | undefined,
-        objectNameSingular: eventName.split(".")[0],
-        objectLabel: eventName.split(".")[0] || undefined,
-      },
-    })
+
+    if (trigger.type === "WEBHOOK") {
+      const httpMethod: WebhookHttpMethod =
+        trigger.settings.httpMethod === "POST" ? "POST" : "GET"
+      const expectedBody =
+        trigger.settings.expectedBody &&
+        typeof trigger.settings.expectedBody === "object" &&
+        !Array.isArray(trigger.settings.expectedBody)
+          ? (trigger.settings.expectedBody as Record<string, unknown>)
+          : undefined
+
+      nodes.push({
+        id: triggerId,
+        type: "trigger",
+        position: { x: 80, y: 180 },
+        data: {
+          blockId: "webhook",
+          label: "Webhook",
+          description: `${httpMethod} webhook`,
+          httpMethod,
+          expectedBody,
+        },
+      })
+    } else {
+      const eventName = String(trigger.settings.eventName ?? "")
+      const [, action = "created"] = eventName.split(".")
+      const blockId =
+        action === "updated"
+          ? "record-updated"
+          : action === "deleted"
+            ? "record-deleted"
+            : "record-created"
+
+      nodes.push({
+        id: triggerId,
+        type: "trigger",
+        position: { x: 80, y: 180 },
+        data: {
+          blockId,
+          label: "Trigger",
+          description: eventName || "Database event",
+          objectId: trigger.settings.objectType as string | undefined,
+          objectNameSingular: eventName.split(".")[0],
+          objectLabel: eventName.split(".")[0] || undefined,
+        },
+      })
+    }
 
     for (const stepId of trigger.nextStepIds ?? []) {
       edges.push({

@@ -29,6 +29,17 @@ async function bootstrap() {
   expressApp.all('/api/auth/{*any}', toNodeHandler(auth));
   expressApp.use(express.json());
 
+  expressApp.use('/webhooks', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+    next();
+  });
+
   // setPassword is server-only in Better Auth; expose a thin cookie-authenticated wrapper.
   expressApp.post('/api/account/set-password', async (req, res) => {
     const newPassword =
