@@ -145,16 +145,6 @@ const AppLayout = () => {
             </svg>
             <div>
 
-            <Button
-                size={"icon-sm"}
-                variant={"secondary"}
-                onClick={() => setAssistantSheetOpen(true)}
-              >
-                <HugeiconsIcon size={20} icon={SparklesFreeIcons} />
-              </Button>
-              <Button size={"icon-sm"} variant={"secondary"}>
-                <HugeiconsIcon size={20} icon={PanelLeftIcon} />
-              </Button>
             </div>
           </div>
 

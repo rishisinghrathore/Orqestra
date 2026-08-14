@@ -68,7 +68,7 @@ export function AssistantSheet() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent
         side="right"
-        className="top-4 right-4 bottom-4 h-auto max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-hidden rounded-lg border border-border shadow-xl sm:max-w-xl data-[side=right]:inset-y-4 data-[side=right]:h-auto data-[side=right]:border-l-0"
+        className="top-4 right-20 bottom-2 h-auto max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-hidden rounded-2xl border border-border shadow-xl sm:max-w-xl data-[side=right]:inset-y-2 data-[side=right]:right-2 data-[side=right]:h-auto data-[side=right]:border-l-0"
       >
         <SheetHeader className="sr-only">
           <SheetTitle>Assistant</SheetTitle>
@@ -106,8 +106,8 @@ export function AssistantSheet() {
             </p>
           </div>
 
-          <div className="mt-auto p-4 pt-0">
-            <InputGroup className="has-[>textarea]:min-h-20 border-border bg-background shadow-lg">
+          <div className="mt-auto pt-0">
+            <InputGroup className="has-[>textarea]:min-h-20 max-h-60 ring-0 border-none">
               <InputGroupTextarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
@@ -125,49 +125,13 @@ export function AssistantSheet() {
                 align="block-end"
                 className="justify-between gap-2"
               >
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <InputGroupButton
-                        variant="outline"
-                        size="icon-xs"
-                        className="rounded-full"
-                        disabled={isRunning}
-                      />
-                    }
-                  >
-                    <HugeiconsIcon icon={Attachment01Icon} />
-                    <span className="sr-only">Add attachment</span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent side="top" align="start">
-                    <DropdownMenuItem
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <HugeiconsIcon icon={FileAttachmentIcon} />
-                      Upload file
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => imageInputRef.current?.click()}
-                    >
-                      <HugeiconsIcon icon={Image01Icon} />
-                      Upload image
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <HugeiconsIcon icon={Link01Icon} />
-                      Add link
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
                 <InputGroupButton
-                  variant="default"
-                  size="icon-xs"
+                  variant="outline"
+                  size="icon-lg"
                   className="ml-auto rounded-full"
-                  aria-label={isRunning ? "Pause" : "Send"}
-                  disabled={!isRunning && !input.trim()}
                   onClick={isRunning ? handlePause : handleSubmit}
                 >
-                  <HugeiconsIcon icon={isRunning ? PauseIcon : ArrowUpRight01Icon} />
+                  Send
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
